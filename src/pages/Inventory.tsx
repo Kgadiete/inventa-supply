@@ -30,7 +30,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/components/ui/use-toast';
+import { CSVImporter } from '@/components/csv/CSVImporter';
+import { BulkOperations, ProductRow } from '@/components/inventory/BulkOperations';
+import { LowStockAlert } from '@/components/notifications/LowStockAlert';
 
 interface Product {
   id: string;
@@ -210,6 +212,8 @@ export default function Inventory() {
 
   return (
     <div className="p-6 space-y-6">
+      <LowStockAlert />
+      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
@@ -257,7 +261,11 @@ export default function Inventory() {
         )}
       </div>
 
-      {/* Filters */}
+        {canModify && (
+          <div className="mb-6">
+            <CSVImporter type="products" onImportComplete={fetchProducts} />
+          </div>
+        )}
       <Card className="border-0 shadow-md">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -329,6 +337,11 @@ export default function Inventory() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
+                      <ProductRow 
+                        product={product} 
+                        isSelected={false} 
+                        onToggle={() => {}} 
+                      />
                       <Button
                         variant="ghost"
                         size="sm"

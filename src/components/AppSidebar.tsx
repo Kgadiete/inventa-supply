@@ -6,7 +6,7 @@ import {
   LogOut,
   TrendingUp
 } from 'lucide-react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -26,15 +26,16 @@ import { useAuth } from '@/contexts/AuthContext';
 const mainItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Inventory', url: '/inventory', icon: Package },
+  { title: 'Stock History', url: '/stock-history', icon: TrendingUp },
   { title: 'Suppliers', url: '/suppliers', icon: Truck },
+  { title: 'Purchase Orders', url: '/purchase-orders', icon: TrendingUp },
   { title: 'Deliveries', url: '/deliveries', icon: TrendingUp },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const location = useLocation();
+  const currentPath = window.location.pathname;
   const { signOut, isAdmin, profile } = useAuth();
-  const currentPath = location.pathname;
   const collapsed = state === 'collapsed';
 
   const isActive = (path: string) => {

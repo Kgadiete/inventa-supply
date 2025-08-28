@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/components/ui/use-toast';
+import { CSVImporter } from '@/components/csv/CSVImporter';
 
 interface Supplier {
   id: string;
@@ -276,6 +276,12 @@ export default function Suppliers() {
             Manage your suppliers and track quotes
           </p>
         </div>
+        {canModify && (
+          <div className="mb-6">
+            <CSVImporter type="suppliers" onImportComplete={fetchSuppliers} />
+          </div>
+        )}
+
         {canModify && (
           <div className="flex gap-2">
             <Dialog open={showQuoteDialog} onOpenChange={setShowQuoteDialog}>
