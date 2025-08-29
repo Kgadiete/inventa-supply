@@ -1,33 +1,42 @@
 import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Package, 
   TrendingUp, 
-  TrendingDown, 
-  Users, 
+  TrendingDown,
+  Package, 
+  Truck, 
   AlertTriangle,
-  Activity
+  Activity,
+  BarChart3,
+  ShoppingCart,
+  Clock,
+  DollarSign,
+  Users
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
 
 interface DashboardStats {
   totalProducts: number;
-  lowStockCount: number;
+  lowStockProducts: number;
   totalSuppliers: number;
+  pendingOrders: number;
   recentMovements: number;
+  totalOrderValue: number;
+  totalUsers: number;
 }
 
-interface Product {
-  id: string;
-  name: string;
-  current_stock: number;
-  reorder_level: number;
-  category: string;
-}
-
-interface StockMovement {
+interface RecentMovement {
   id: string;
   type: 'in' | 'out';
   quantity: number;
@@ -36,89 +45,85 @@ interface StockMovement {
   profiles: { name: string };
 }
 
+interface LowStockProduct {
+  id: string;
+  name: string;
+  current_stock: number;
+  reorder_level: number;
+  category: string;
+}
+
 export default function Dashboard() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
-    lowStockCount: 0,
+    lowStockProducts: 0,
     totalSuppliers: 0,
+    pendingOrders: 0,
     recentMovements: 0,
+    totalOrderValue: 0,
+    totalUsers: 0,
   });
-  const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
-  const [recentActivity, setRecentActivity] = useState<StockMovement[]>([]);
+  const [recentMovements, setRecentMovements] = useState<RecentMovement[]>([]);
+  const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardData();
-    
-    // Set up real-time listeners
-    const productsChannel = supabase
-      .channel('dashboard-products')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'products' },
-        () => fetchDashboardData()
-      )
-      .subscribe();
-
-    const movementsChannel = supabase
-      .channel('dashboard-movements')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'stock_movements' },
-        () => fetchDashboardData()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(productsChannel);
-      supabase.removeChannel(movementsChannel);
-    };
-  }, []);
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user]);
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch products and calculate stats
-      const { data: products } = await supabase
-        .from('products')
-        .select('*');
+      const [
+        { count: totalProducts },
+        { data: lowStockData },
+        { count: totalSuppliers },
+        { count: pendingOrders },
+        { count: recentMovements },
+        { data: orderData },
+        { count: totalUsers },
+        { data: movementsData }
+      ] = await Promise.all([
+        supabase.from('products').select('*', { count: 'exact', head: true }),
+        supabase.from('products').select('id, name, current_stock, reorder_level, category').filter('current_stock', 'lt', 'reorder_level').limit(5),
+        supabase.from('suppliers').select('*', { count: 'exact', head: true }),
+        supabase.from('purchase_orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase
+          .from('stock_movements')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from('purchase_orders').select('total_amount'),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase
+          .from('stock_movements')
+          .select(`
+            id,
+            type,
+            quantity,
+            created_at,
+            products (name),
+            profiles (name)
+          `)
+          .order('created_at', { ascending: false })
+          .limit(5)
+      ]);
 
-      // Fetch suppliers count
-      const { count: suppliersCount } = await supabase
-        .from('suppliers')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch recent movements count (last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const { count: movementsCount } = await supabase
-        .from('stock_movements')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', sevenDaysAgo.toISOString());
-
-      // Calculate low stock products
-      const lowStock = products?.filter(p => p.current_stock <= p.reorder_level) || [];
+      const totalOrderValue = orderData?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
 
       setStats({
-        totalProducts: products?.length || 0,
-        lowStockCount: lowStock.length,
-        totalSuppliers: suppliersCount || 0,
-        recentMovements: movementsCount || 0,
+        totalProducts: totalProducts || 0,
+        lowStockProducts: lowStockData?.length || 0,
+        totalSuppliers: totalSuppliers || 0,
+        pendingOrders: pendingOrders || 0,
+        recentMovements: recentMovements || 0,
+        totalOrderValue,
+        totalUsers: totalUsers || 0,
       });
 
-      setLowStockProducts(lowStock.slice(0, 5)); // Show top 5
-
-      // Fetch recent activity
-      const { data: movements } = await supabase
-        .from('stock_movements')
-        .select(`
-          *,
-          products (name),
-          profiles (name)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      setRecentActivity(movements || []);
+      setLowStockProducts(lowStockData || []);
+      setRecentMovements(movementsData || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -142,126 +147,130 @@ export default function Dashboard() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, {profile?.name}! Here's your inventory overview.
+            Overview of your inventory management system
           </p>
         </div>
+        <Badge variant="secondary" className="bg-gradient-primary text-white">
+          {profile?.role?.charAt(0).toUpperCase() + profile?.role?.slice(1)}
+        </Badge>
       </div>
 
-      {/* Stats Cards */}
+      {/* Key Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-md">
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Products</CardTitle>
             <Package className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalProducts}</div>
-            <p className="text-xs text-muted-foreground">Items in inventory</p>
+            <div className="flex items-center gap-1 mt-1">
+              <TrendingUp className="h-3 w-3 text-success" />
+              <p className="text-xs text-success">Active inventory</p>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md">
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
+            <CardTitle className="text-sm font-medium">Low Stock Alerts</CardTitle>
             <AlertTriangle className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-warning">{stats.lowStockCount}</div>
-            <p className="text-xs text-muted-foreground">Need attention</p>
+            <div className="text-2xl font-bold text-warning">{stats.lowStockProducts}</div>
+            <p className="text-xs text-muted-foreground">Items need reordering</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md">
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Suppliers</CardTitle>
-            <Users className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium">Order Value</CardTitle>
+            <DollarSign className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalSuppliers}</div>
-            <p className="text-xs text-muted-foreground">Active suppliers</p>
+            <div className="text-2xl font-bold">${stats.totalOrderValue.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Total purchase orders</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md">
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+            <CardTitle className="text-sm font-medium">Weekly Activity</CardTitle>
             <Activity className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.recentMovements}</div>
-            <p className="text-xs text-muted-foreground">Last 7 days</p>
+            <p className="text-xs text-muted-foreground">Stock movements</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Secondary Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-0 shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Suppliers</CardTitle>
+            <Truck className="h-4 w-4 text-success" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalSuppliers}</div>
+            <p className="text-xs text-muted-foreground">Registered suppliers</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.pendingOrders}</div>
+            <p className="text-xs text-muted-foreground">Awaiting delivery</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalUsers}</div>
+            <p className="text-xs text-muted-foreground">Active users</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Low Stock Alert */}
+        {/* Recent Stock Movements */}
         <Card className="border-0 shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              Low Stock Alert
+              <Clock className="w-5 h-5 text-primary" />
+              Recent Stock Movements
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {lowStockProducts.length === 0 ? (
-              <p className="text-muted-foreground">All products are well stocked! 🎉</p>
-            ) : (
+            {recentMovements.length > 0 ? (
               <div className="space-y-3">
-                {lowStockProducts.map((product) => (
-                  <div key={product.id} className="flex items-center justify-between p-3 bg-warning-light rounded-lg">
-                    <div>
-                      <p className="font-medium">{product.name}</p>
-                      <p className="text-sm text-muted-foreground capitalize">{product.category}</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="secondary" className="bg-warning text-warning-foreground">
-                        {product.current_stock} left
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Reorder at {product.reorder_level}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card className="border-0 shadow-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" />
-              Recent Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentActivity.length === 0 ? (
-              <p className="text-muted-foreground">No recent activity</p>
-            ) : (
-              <div className="space-y-3">
-                {recentActivity.map((movement) => (
-                  <div key={movement.id} className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-                    <div className={`p-2 rounded-full ${
-                      movement.type === 'in' ? 'bg-success-light' : 'bg-danger-light'
-                    }`}>
+                {recentMovements.map((movement) => (
+                  <div key={movement.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                    <div className="flex items-center gap-3">
                       {movement.type === 'in' ? (
-                        <TrendingUp className="h-4 w-4 text-success" />
+                        <TrendingUp className="w-4 h-4 text-success" />
                       ) : (
-                        <TrendingDown className="h-4 w-4 text-danger" />
+                        <TrendingDown className="w-4 h-4 text-danger" />
                       )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium">{movement.products.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {movement.type === 'in' ? 'Added' : 'Removed'} {movement.quantity} units
-                      </p>
+                      <div>
+                        <p className="font-medium text-sm">{movement.products.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          by {movement.profiles.name}
+                        </p>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-muted-foreground">
-                        {movement.profiles.name}
+                      <p className={`font-medium ${movement.type === 'in' ? 'text-success' : 'text-danger'}`}>
+                        {movement.type === 'in' ? '+' : '-'}{movement.quantity}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(movement.created_at).toLocaleDateString()}
@@ -270,10 +279,110 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
+            ) : (
+              <p className="text-center py-6 text-muted-foreground">
+                No recent stock movements
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Low Stock Alerts */}
+        <Card className="border-0 shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-warning" />
+              Low Stock Alerts
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {lowStockProducts.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Current</TableHead>
+                    <TableHead>Reorder</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lowStockProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm">{product.name}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{product.category}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="bg-warning text-warning-foreground">
+                          {product.current_stock}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {product.reorder_level}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-6">
+                <Package className="w-12 h-12 text-success mx-auto mb-3 opacity-50" />
+                <p className="text-muted-foreground">All products are well stocked!</p>
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card className="border-0 shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary" />
+            Quick Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Button 
+              onClick={() => window.location.href = '/inventory'} 
+              variant="outline" 
+              className="h-auto p-4 flex flex-col items-center gap-2 hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              <Package className="w-6 h-6" />
+              <span className="text-sm">Manage Products</span>
+            </Button>
+            <Button 
+              onClick={() => window.location.href = '/suppliers'} 
+              variant="outline" 
+              className="h-auto p-4 flex flex-col items-center gap-2 hover:bg-success hover:text-success-foreground transition-colors"
+            >
+              <Truck className="w-6 h-6" />
+              <span className="text-sm">View Suppliers</span>
+            </Button>
+            <Button 
+              onClick={() => window.location.href = '/purchase-orders'} 
+              variant="outline" 
+              className="h-auto p-4 flex flex-col items-center gap-2 hover:bg-warning hover:text-warning-foreground transition-colors"
+            >
+              <ShoppingCart className="w-6 h-6" />
+              <span className="text-sm">Purchase Orders</span>
+            </Button>
+            <Button 
+              onClick={() => window.location.href = '/stock-history'} 
+              variant="outline" 
+              className="h-auto p-4 flex flex-col items-center gap-2 hover:bg-muted hover:text-muted-foreground transition-colors"
+            >
+              <Clock className="w-6 h-6" />
+              <span className="text-sm">View History</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

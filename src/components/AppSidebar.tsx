@@ -4,7 +4,9 @@ import {
   Truck, 
   Users, 
   LogOut,
-  TrendingUp
+  TrendingUp,
+  ShoppingCart,
+  Route
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -28,8 +30,8 @@ const mainItems = [
   { title: 'Inventory', url: '/inventory', icon: Package },
   { title: 'Stock History', url: '/stock-history', icon: TrendingUp },
   { title: 'Suppliers', url: '/suppliers', icon: Truck },
-  { title: 'Purchase Orders', url: '/purchase-orders', icon: TrendingUp },
-  { title: 'Deliveries', url: '/deliveries', icon: TrendingUp },
+  { title: 'Purchase Orders', url: '/purchase-orders', icon: ShoppingCart },
+  { title: 'Deliveries', url: '/deliveries', icon: Route },
 ];
 
 export function AppSidebar() {
