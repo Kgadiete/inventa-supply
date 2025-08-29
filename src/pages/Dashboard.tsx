@@ -12,11 +12,11 @@ import {
   BarChart3,
   ShoppingCart,
   Clock,
-  DollarSign,
   Users
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { formatCurrency } from '@/lib/utils';
 import { 
   Table, 
   TableBody, 
@@ -53,6 +53,16 @@ interface LowStockProduct {
   category: string;
 }
 
+interface RecentPurchaseOrder {
+  id: string;
+  po_number: string;
+  status: string;
+  total_amount: number;
+  created_at: string;
+  suppliers: { name: string } | null;
+  profiles: { name: string } | null;
+}
+
 export default function Dashboard() {
   const { user, profile } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
@@ -66,13 +76,54 @@ export default function Dashboard() {
   });
   const [recentMovements, setRecentMovements] = useState<RecentMovement[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([]);
+  const [recentPurchaseOrders, setRecentPurchaseOrders] = useState<RecentPurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
+    useEffect(() => {
+    if (user && profile) {
       fetchDashboardData();
+
+      // Set up real-time listeners for dashboard data
+      const purchaseOrdersChannel = supabase
+        .channel('dashboard-purchase-orders')
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'purchase_orders' },
+          () => fetchDashboardData()
+        )
+        .subscribe();
+
+      const stockMovementsChannel = supabase
+        .channel('dashboard-stock-movements')
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'stock_movements' },
+          () => fetchDashboardData()
+        )
+        .subscribe();
+
+      const productsChannel = supabase
+        .channel('dashboard-products')
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'products' },
+          () => fetchDashboardData()
+        )
+        .subscribe();
+
+      const suppliersChannel = supabase
+        .channel('dashboard-suppliers')
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'suppliers' },
+          () => fetchDashboardData()
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(purchaseOrdersChannel);
+        supabase.removeChannel(stockMovementsChannel);
+        supabase.removeChannel(productsChannel);
+        supabase.removeChannel(suppliersChannel);
+      };
     }
-  }, [user]);
+  }, [user, profile]);
 
   const fetchDashboardData = async () => {
     try {
@@ -84,7 +135,8 @@ export default function Dashboard() {
         { count: recentMovements },
         { data: orderData },
         { count: totalUsers },
-        { data: movementsData }
+        { data: movementsData },
+        { data: purchaseOrdersData }
       ] = await Promise.all([
         supabase.from('products').select('*', { count: 'exact', head: true }),
         supabase.from('products').select('id, name, current_stock, reorder_level, category').filter('current_stock', 'lt', 'reorder_level').limit(5),
@@ -107,6 +159,19 @@ export default function Dashboard() {
             profiles (name)
           `)
           .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('purchase_orders')
+          .select(`
+            id,
+            po_number,
+            status,
+            total_amount,
+            created_at,
+            suppliers (name),
+            profiles (name)
+          `)
+          .order('created_at', { ascending: false })
           .limit(5)
       ]);
 
@@ -124,6 +189,7 @@ export default function Dashboard() {
 
       setLowStockProducts(lowStockData || []);
       setRecentMovements(movementsData || []);
+      setRecentPurchaseOrders(purchaseOrdersData || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -131,11 +197,14 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
+  if (loading || !profile) {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="ml-3 text-muted-foreground">
+            {!profile ? 'Loading user profile...' : 'Loading dashboard data...'}
+          </p>
         </div>
       </div>
     );
@@ -185,10 +254,10 @@ export default function Dashboard() {
         <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Order Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-success" />
+            <BarChart3 className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalOrderValue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.totalOrderValue)}</div>
             <p className="text-xs text-muted-foreground">Total purchase orders</p>
           </CardContent>
         </Card>
@@ -337,6 +406,59 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Purchase Orders */}
+      <Card className="border-0 shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-primary" />
+            Recent Purchase Orders
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentPurchaseOrders.length > 0 ? (
+            <div className="space-y-3">
+              {recentPurchaseOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <ShoppingCart className="w-4 h-4 text-primary" />
+                    <div>
+                      <p className="font-medium text-sm">{order.po_number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {order.suppliers?.name || 'Unknown Supplier'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-sm">{formatCurrency(order.total_amount)}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge 
+                        variant="secondary" 
+                        className={
+                          order.status === 'pending' ? 'bg-warning text-warning-foreground' :
+                          order.status === 'approved' ? 'bg-primary text-primary-foreground' :
+                          order.status === 'sent' ? 'bg-blue-500 text-white' :
+                          order.status === 'received' ? 'bg-success text-success-foreground' :
+                          'bg-destructive text-destructive-foreground'
+                        }
+                      >
+                        {order.status}
+                      </Badge>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center py-6 text-muted-foreground">
+              No recent purchase orders
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
       <Card className="border-0 shadow-md">

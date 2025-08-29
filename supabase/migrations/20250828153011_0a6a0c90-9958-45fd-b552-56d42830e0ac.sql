@@ -64,7 +64,7 @@ EXECUTE FUNCTION public.update_updated_at_column();
 CREATE OR REPLACE FUNCTION public.generate_po_number()
 RETURNS TEXT
 LANGUAGE sql
-STABLE SECURITY DEFINER
+VOLATILE SECURITY DEFINER
 SET search_path TO 'public'
 AS $function$
   SELECT 'PO-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(NEXTVAL('po_sequence')::TEXT, 4, '0');

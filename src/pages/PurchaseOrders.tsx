@@ -28,6 +28,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
 
 interface PurchaseOrder {
   id: string;
@@ -59,6 +60,8 @@ interface Supplier {
 export default function PurchaseOrders() {
   const { canModify, profile } = useAuth();
   const { toast } = useToast();
+  
+
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<PurchaseOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -72,28 +75,43 @@ export default function PurchaseOrders() {
   ]);
 
   useEffect(() => {
-    fetchData();
+    // Only fetch data when profile is available
+    if (profile) {
+      fetchData();
+    }
+  }, [profile]);
 
-    // Set up real-time listener
-    const channel = supabase
-      .channel('purchase-orders')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'purchase_orders' },
-        () => fetchPurchaseOrders()
-      )
-      .subscribe();
+  useEffect(() => {
+    // Set up real-time listener only when profile is available
+    if (profile) {
+      const channel = supabase
+        .channel('purchase-orders')
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'purchase_orders' },
+          () => {
+            // Only refetch if we have a profile and aren't already loading
+            if (profile && !loading) {
+              fetchPurchaseOrders();
+            }
+          }
+        )
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [profile, loading]);
 
   useEffect(() => {
     filterOrders();
   }, [purchaseOrders, searchTerm, statusFilter]);
 
   const fetchData = async () => {
+    if (!profile) return; // Guard against calling without profile
+    
     try {
+      setLoading(true);
       await Promise.all([
         fetchPurchaseOrders(),
         fetchProducts(),
@@ -107,6 +125,24 @@ export default function PurchaseOrders() {
   };
 
   const fetchPurchaseOrders = async () => {
+    if (!profile) return; // Guard against calling without profile
+    
+    console.log('Fetching purchase orders with profile:', profile.id);
+    
+    // First try a simple query to see if the basic table access works
+    const { data: simpleData, error: simpleError } = await supabase
+      .from('purchase_orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (simpleError) {
+      console.error('Simple query failed:', simpleError);
+      throw simpleError;
+    }
+
+    console.log('Simple query successful, got', simpleData?.length || 0, 'orders');
+
+    // Now try the full query with joins
     const { data, error } = await supabase
       .from('purchase_orders')
       .select(`
@@ -116,7 +152,18 @@ export default function PurchaseOrders() {
       `)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching purchase orders:', error);
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      throw error;
+    }
+    
+    console.log('Purchase orders fetched successfully:', data?.length || 0, 'orders');
     setPurchaseOrders((data as any) || []);
   };
 
@@ -195,14 +242,13 @@ export default function PurchaseOrders() {
     const formData = new FormData(e.currentTarget);
     
     try {
-      // Generate PO number
-      const { data: poNumberData, error: poNumberError } = await supabase
-        .rpc('generate_po_number');
-
-      if (poNumberError) throw poNumberError;
+      // Generate PO number client-side to avoid read-only transaction issues
+      const currentYear = new Date().getFullYear();
+      const timestamp = Date.now();
+      const poNumber = `PO-${currentYear}-${String(timestamp).slice(-4)}`;
 
       const poData = {
-        po_number: poNumberData,
+        po_number: poNumber,
         supplier_id: formData.get('supplier_id') as string,
         user_id: profile.id,
         total_amount: calculateTotal(),
@@ -252,7 +298,7 @@ export default function PurchaseOrders() {
 
   const exportPO = (po: PurchaseOrder) => {
     // Simple CSV export - in a real app, you'd generate a proper PDF
-    const csvContent = `Purchase Order: ${po.po_number}\nSupplier: ${po.suppliers?.name || 'Unknown'}\nTotal: $${po.total_amount.toFixed(2)}\nStatus: ${po.status}\nCreated: ${new Date(po.created_at).toLocaleDateString()}`;
+    const csvContent = `Purchase Order: ${po.po_number}\nSupplier: ${po.suppliers?.name || 'Unknown'}\nTotal: ${formatCurrency(po.total_amount)}\nStatus: ${po.status}\nCreated: ${new Date(po.created_at).toLocaleDateString()}`;
     
     const blob = new Blob([csvContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
@@ -274,11 +320,14 @@ export default function PurchaseOrders() {
     }
   };
 
-  if (loading) {
+  if (loading || !profile) {
     return (
       <div className="p-4 sm:p-6">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="ml-3 text-muted-foreground">
+            {!profile ? 'Loading user profile...' : 'Loading purchase orders...'}
+          </p>
         </div>
       </div>
     );
@@ -382,10 +431,10 @@ export default function PurchaseOrders() {
                       <div className="space-y-2">
                         <Label>Total</Label>
                         <div className="flex items-center gap-2">
-                          <Input
-                            value={`$${(item.quantity * item.unit_price).toFixed(2)}`}
-                            disabled
-                          />
+                                                     <Input
+                             value={formatCurrency(item.quantity * item.unit_price)}
+                             disabled
+                           />
                           {orderItems.length > 1 && (
                             <Button
                               type="button"
@@ -409,7 +458,7 @@ export default function PurchaseOrders() {
 
                 <div className="flex items-center justify-between p-4 bg-secondary rounded">
                   <span className="font-medium">Total Amount:</span>
-                  <span className="text-xl font-bold">${calculateTotal().toFixed(2)}</span>
+                  <span className="text-xl font-bold">{formatCurrency(calculateTotal())}</span>
                 </div>
 
                 <Button type="submit" className="w-full">Create Purchase Order</Button>
@@ -478,7 +527,7 @@ export default function PurchaseOrders() {
                         {order.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>${order.total_amount.toFixed(2)}</TableCell>
+                    <TableCell>{formatCurrency(order.total_amount)}</TableCell>
                     <TableCell className="hidden md:table-cell">
                       {order.expected_delivery 
                         ? new Date(order.expected_delivery).toLocaleDateString()

@@ -15,3 +15,19 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   }
 });
+
+// Test the connection
+console.log('Supabase client initialized with URL:', SUPABASE_URL);
+
+// Test the connection by making a simple query
+supabase.from('profiles').select('count', { count: 'exact', head: true })
+  .then(({ data, error }) => {
+    if (error) {
+      console.error('Supabase connection test failed:', error);
+    } else {
+      console.log('Supabase connection test successful');
+    }
+  })
+  .catch((error) => {
+    console.error('Supabase connection test error:', error);
+  });

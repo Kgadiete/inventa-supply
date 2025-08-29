@@ -34,12 +34,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { CSVImporter } from '@/components/csv/CSVImporter';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
 
 interface Supplier {
   id: string;
   name: string;
-  contact_info: any; // JSONB field from Supabase
-  product_types: string[];
+  contact_info: {
+    email?: string;
+    phone?: string;
+    address?: string;
+  } | null;
+  product_types: string[] | null;
   rating: number | null;
   created_at: string;
   updated_at: string;
@@ -157,9 +162,9 @@ export default function Suppliers() {
     if (searchTerm) {
       filtered = filtered.filter(supplier =>
         supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        supplier.product_types.some(type => 
+        (supplier.product_types && supplier.product_types.some(type => 
           type.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+        ))
       );
     }
 
@@ -427,19 +432,19 @@ export default function Suppliers() {
                   </div>
                   
                   <div className="space-y-2 text-sm">
-                    {supplier.contact_info.email && (
+                    {supplier.contact_info?.email && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Mail className="w-4 h-4" />
                         {supplier.contact_info.email}
                       </div>
                     )}
-                    {supplier.contact_info.phone && (
+                    {supplier.contact_info?.phone && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Phone className="w-4 h-4" />
                         {supplier.contact_info.phone}
                       </div>
                     )}
-                    {supplier.contact_info.address && (
+                    {supplier.contact_info?.address && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <MapPin className="w-4 h-4" />
                         {supplier.contact_info.address}
@@ -447,7 +452,7 @@ export default function Suppliers() {
                     )}
                   </div>
                   
-                  {supplier.product_types.length > 0 && (
+                  {supplier.product_types && supplier.product_types.length > 0 && (
                     <div className="mt-3">
                       <div className="flex flex-wrap gap-1">
                         {supplier.product_types.map((type, index) => (
@@ -481,7 +486,7 @@ export default function Suppliers() {
                   <div className="flex items-center justify-between mb-2">
                     <p className="font-medium">{quote.products.name}</p>
                     <Badge variant="secondary" className="bg-primary text-primary-foreground">
-                      ${quote.price.toFixed(2)}
+                      {formatCurrency(quote.price)}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">

@@ -42,9 +42,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
 
   useEffect(() => {
+    console.log('AuthProvider: Initializing auth state...');
+    
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.log('AuthProvider: Timeout reached, setting loading to false');
+      setLoading(false);
+    }, 10000); // 10 second timeout
+    
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('AuthProvider: Auth state changed:', event, session?.user?.email);
+        clearTimeout(timeoutId);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -61,7 +71,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('AuthProvider: Initial session check:', session?.user?.email, error);
+      clearTimeout(timeoutId);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -69,9 +81,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchUserProfile(session.user.id);
       }
       setLoading(false);
+    }).catch((error) => {
+      console.error('AuthProvider: Error getting session:', error);
+      clearTimeout(timeoutId);
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchUserProfile = async (userId: string) => {
@@ -164,6 +183,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = profile?.role === 'admin';
   const isManager = profile?.role === 'manager';
   const canModify = isAdmin || isManager;
+  
+
 
   const value = {
     user,

@@ -34,6 +34,7 @@ import { CSVImporter } from '@/components/csv/CSVImporter';
 import { BulkOperations, ProductRow } from '@/components/inventory/BulkOperations';
 import { LowStockAlert } from '@/components/notifications/LowStockAlert';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
 
 interface Product {
   id: string;
@@ -323,7 +324,7 @@ export default function Inventory() {
                   <TableCell className="capitalize">{product.category}</TableCell>
                   <TableCell>{product.current_stock}</TableCell>
                   <TableCell>{product.reorder_level}</TableCell>
-                  <TableCell>${product.unit_price.toFixed(2)}</TableCell>
+                  <TableCell>{formatCurrency(product.unit_price)}</TableCell>
                   <TableCell>
                     {product.current_stock <= product.reorder_level ? (
                       <Badge variant="secondary" className="bg-warning text-warning-foreground">
