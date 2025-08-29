@@ -1,7 +1,21 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 
 export default function Index() {
-  const { user, loading } = useAuth();
+  const { user, loading, isSuperAdmin, profile } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user && profile && !loading) {
+      // Auto-redirect based on role
+      if (isSuperAdmin) {
+        navigate('/super-admin-dashboard', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [user, profile, loading, isSuperAdmin, navigate]);
 
   if (loading) {
     return (

@@ -6,7 +6,8 @@ import {
   LogOut,
   TrendingUp,
   ShoppingCart,
-  Route
+  Route,
+  Building2
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -25,19 +26,29 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 
-const mainItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Inventory', url: '/inventory', icon: Package },
-  { title: 'Stock History', url: '/stock-history', icon: TrendingUp },
-  { title: 'Suppliers', url: '/suppliers', icon: Truck },
-  { title: 'Purchase Orders', url: '/purchase-orders', icon: ShoppingCart },
-  { title: 'Deliveries', url: '/deliveries', icon: Route },
-];
+const getMainItems = (isSuperAdmin: boolean) => {
+  if (isSuperAdmin) {
+    return [
+      { title: 'Dashboard', url: '/super-admin-dashboard', icon: LayoutDashboard },
+      { title: 'Companies', url: '/company-management', icon: Building2 },
+      { title: 'Users', url: '/users', icon: Users },
+    ];
+  }
+  
+  return [
+    { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
+    { title: 'Inventory', url: '/inventory', icon: Package },
+    { title: 'Stock History', url: '/stock-history', icon: TrendingUp },
+    { title: 'Suppliers', url: '/suppliers', icon: Truck },
+    { title: 'Purchase Orders', url: '/purchase-orders', icon: ShoppingCart },
+    { title: 'Deliveries', url: '/deliveries', icon: Route },
+  ];
+};
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const currentPath = window.location.pathname;
-  const { signOut, isAdmin, profile } = useAuth();
+  const { signOut, isSuperAdmin, isCompanyOwner, profile } = useAuth();
   const collapsed = state === 'collapsed';
 
   const isActive = (path: string) => {
@@ -82,7 +93,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainItems.map((item) => (
+              {getMainItems(isSuperAdmin).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} className={getNavCls(item.url)}>
@@ -92,16 +103,7 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <NavLink to="/users" className={getNavCls('/users')}>
-                      <Users className="w-4 h-4 mr-2" />
-                      {!collapsed && <span>Users</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -110,8 +112,8 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border p-4">
         {!collapsed && profile && (
           <div className="mb-3">
-            <p className="text-sm font-medium text-sidebar-foreground">{profile.name}</p>
-            <p className="text-xs text-sidebar-foreground/60 capitalize">{profile.role}</p>
+            <p className="text-sm font-medium text-sidebar-foreground">{profile.full_name}</p>
+            <p className="text-xs text-sidebar-foreground/60 capitalize">{profile.role.replace('_', ' ')}</p>
           </div>
         )}
         <Button

@@ -2,25 +2,20 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-
-interface Profile {
-  id: string;
-  name: string;
-  role: 'admin' | 'manager' | 'staff';
-  created_at: string;
-  updated_at: string;
-}
+import { Profile, Company, Department } from '@/types/database';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  company: Company | null;
+  department: Department | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  isAdmin: boolean;
-  isManager: boolean;
+  isSuperAdmin: boolean;
+  isCompanyOwner: boolean;
+  isDepartmentManager: boolean;
   canModify: boolean;
 }
 
@@ -38,6 +33,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [department, setDepartment] = useState<Department | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -97,7 +94,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          *,
+          company:companies(*),
+          department:departments(*)
+        `)
         .eq('id', userId)
         .single();
 
@@ -107,6 +108,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setProfile(data);
+      setCompany(data.company);
+      setDepartment(data.department);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -134,40 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
-    try {
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            name: name,
-          },
-        },
-      });
 
-      if (error) {
-        toast({
-          title: 'Sign up failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Account created!',
-          description: 'Please check your email to verify your account.',
-        });
-      }
-
-      return { error };
-    } catch (error) {
-      console.error('Sign up error:', error);
-      return { error };
-    }
-  };
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -180,9 +150,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isAdmin = profile?.role === 'admin';
-  const isManager = profile?.role === 'manager';
-  const canModify = isAdmin || isManager;
+  const isSuperAdmin = profile?.role === 'super_admin';
+  const isCompanyOwner = profile?.role === 'company_owner';
+  const isDepartmentManager = profile?.role === 'department_manager';
+  const canModify = isSuperAdmin || isCompanyOwner || isDepartmentManager;
   
 
 
@@ -190,12 +161,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     session,
     profile,
+    company,
+    department,
     loading,
     signIn,
-    signUp,
     signOut,
-    isAdmin,
-    isManager,
+    isSuperAdmin,
+    isCompanyOwner,
+    isDepartmentManager,
     canModify,
   };
 
