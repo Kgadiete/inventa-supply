@@ -92,6 +92,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log('AuthContext: Fetching profile for user:', userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select(`
@@ -107,6 +109,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      console.log('AuthContext: Profile fetched:', data);
+      console.log('AuthContext: Company data:', data.company);
+      console.log('AuthContext: Department data:', data.department);
+      
       setProfile(data);
       setCompany(data.company);
       setDepartment(data.department);
@@ -154,6 +160,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isCompanyOwner = profile?.role === 'company_owner';
   const isDepartmentManager = profile?.role === 'department_manager';
   const canModify = isSuperAdmin || isCompanyOwner || isDepartmentManager;
+  
+  // Debug logging
+  console.log('AuthContext: Role checks:', {
+    profile: profile?.role,
+    isSuperAdmin,
+    isCompanyOwner,
+    isDepartmentManager,
+    canModify
+  });
+  
+  // Additional safety checks
+  if (profile && !profile.role) {
+    console.error('AuthContext: Profile has no role defined:', profile);
+  }
+  
+  if (profile && !['super_admin', 'company_owner', 'department_manager', 'staff'].includes(profile.role)) {
+    console.error('AuthContext: Profile has invalid role:', profile.role);
+  }
   
 
 

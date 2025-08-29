@@ -18,7 +18,9 @@ import Deliveries from "./pages/Deliveries";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import StockHistory from "./pages/StockHistory";
 import CompanyManagement from "./pages/CompanyManagement";
+import UserManagement from "./pages/UserManagement";
 import NotFound from "./pages/NotFound";
+import AcceptInvite from "./pages/AcceptInvite";
 import { useState, useEffect } from "react";
 
 const queryClient = new QueryClient({
@@ -100,12 +102,13 @@ const App = () => {
                 <Route path="/" element={<Index />} />
                 <Route path="/test" element={<Test />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/accept-invite" element={<AcceptInvite />} />
                 <Route path="/dashboard" element={<Layout><SmartDashboard /></Layout>} />
                 <Route path="/inventory" element={<Layout><Inventory /></Layout>} />
                 <Route path="/suppliers" element={<Layout><Suppliers /></Layout>} />
                 <Route path="/purchase-orders" element={<Layout><PurchaseOrders /></Layout>} />
                 <Route path="/stock-history" element={<Layout><StockHistory /></Layout>} />
-                <Route path="/users" element={<Layout><Users /></Layout>} />
+                <Route path="/users" element={<Layout><UserManagement /></Layout>} />
                 <Route path="/deliveries" element={<Layout><Deliveries /></Layout>} />
                 <Route path="/company-management" element={<Layout><CompanyManagement /></Layout>} />
                 <Route path="/super-admin-dashboard" element={<Layout><SuperAdminDashboard /></Layout>} />

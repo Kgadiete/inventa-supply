@@ -3,17 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 
 export default function Index() {
-  const { user, loading, isSuperAdmin, profile } = useAuth();
+  const { user, loading, isSuperAdmin, isCompanyOwner, profile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user && profile && !loading) {
-      // Auto-redirect based on role
-      if (isSuperAdmin) {
-        navigate('/super-admin-dashboard', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
+    if (loading) return;
+    // Not signed in → go to auth
+    if (!user) {
+      navigate('/auth', { replace: true });
+      return;
+    }
+    // Signed in → route by role
+    if (profile) {
+      if (isSuperAdmin) navigate('/super-admin-dashboard', { replace: true });
+      else navigate('/dashboard', { replace: true });
     }
   }, [user, profile, loading, isSuperAdmin, navigate]);
 
@@ -29,24 +32,7 @@ export default function Index() {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md mx-auto p-6">
-          <h1 className="text-3xl font-bold text-foreground mb-4">Welcome to Inventa Supply</h1>
-          <p className="text-muted-foreground mb-6">
-            Your inventory management system
-          </p>
-          <a 
-            href="/auth" 
-            className="inline-block px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Sign In
-          </a>
-        </div>
-      </div>
-    );
-  }
+  if (!user) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">

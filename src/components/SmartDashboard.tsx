@@ -2,9 +2,10 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
+import CompanyOwnerDashboard from '@/pages/CompanyOwnerDashboard';
 
 export default function SmartDashboard() {
-  const { profile, isSuperAdmin, loading } = useAuth();
+  const { profile, isSuperAdmin, isCompanyOwner, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -12,11 +13,14 @@ export default function SmartDashboard() {
       // Redirect based on user role
       if (isSuperAdmin) {
         navigate('/super-admin-dashboard', { replace: true });
+      } else if (isCompanyOwner) {
+        // Show Company Owner Dashboard directly
+        return;
       } else {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [profile, isSuperAdmin, loading, navigate]);
+  }, [profile, isSuperAdmin, isCompanyOwner, loading, navigate]);
 
   if (loading) {
     return (
@@ -30,6 +34,11 @@ export default function SmartDashboard() {
         </Card>
       </div>
     );
+  }
+
+  // If Company Owner, show their dashboard directly
+  if (isCompanyOwner) {
+    return <CompanyOwnerDashboard />;
   }
 
   return (

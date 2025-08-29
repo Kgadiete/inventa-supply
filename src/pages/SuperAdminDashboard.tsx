@@ -23,13 +23,33 @@ export default function SuperAdminDashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      console.log('SuperAdminDashboard: Fetching dashboard data...');
+      
+      // Test database connection first
+      const { data: testData, error: testError } = await supabase
+        .from('profiles')
+        .select('count')
+        .limit(1);
+      
+      if (testError) {
+        console.error('Database connection test failed:', testError);
+        throw testError;
+      }
+      
+      console.log('Database connection successful');
+      
       // Fetch companies
       const { data: companiesData, error: companiesError } = await supabase
         .from('companies')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (companiesError) throw companiesError;
+      if (companiesError) {
+        console.error('Error fetching companies:', companiesError);
+        throw companiesError;
+      }
+      
+      console.log('Companies fetched:', companiesData);
       setCompanies(companiesData || []);
 
       // Fetch total users
@@ -37,7 +57,12 @@ export default function SuperAdminDashboard() {
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
-      if (usersError) throw usersError;
+      if (usersError) {
+        console.error('Error fetching users count:', usersError);
+        throw usersError;
+      }
+      
+      console.log('Users count fetched:', usersCount);
       setTotalUsers(usersCount || 0);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -345,14 +370,7 @@ export default function SuperAdminDashboard() {
               <Users className="w-6 h-6" />
               <span>Manage Users</span>
             </Button>
-            <Button 
-              variant="outline" 
-              className="h-20 flex-col gap-2"
-              onClick={() => navigate('/company-management')}
-            >
-              <Settings className="w-6 h-6" />
-              <span>System Settings</span>
-            </Button>
+            {/* System Settings placeholder removed to avoid confusion */}
           </div>
         </CardContent>
       </Card>

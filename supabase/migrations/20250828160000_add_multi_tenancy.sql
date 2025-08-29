@@ -202,3 +202,13 @@ BEGIN
     );
 END;
 $$;
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS phone varchar(30),
+  ADD COLUMN IF NOT EXISTS account_status varchar(20) DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS employee_number varchar(6);
+
+-- Unique per company (excluding null)
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_profiles_employee_per_company
+ON public.profiles (company_id, employee_number)
+WHERE employee_number IS NOT NULL;
