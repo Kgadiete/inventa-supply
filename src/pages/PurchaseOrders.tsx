@@ -39,10 +39,10 @@ interface PurchaseOrder {
   created_at: string;
   suppliers: {
     name: string;
-  };
+  } | null;
   profiles: {
     name: string;
-  };
+  } | null;
 }
 
 interface Product {
@@ -111,13 +111,13 @@ export default function PurchaseOrders() {
       .from('purchase_orders')
       .select(`
         *,
-        suppliers!inner (name),
-        profiles!inner (name)
+        suppliers (name),
+        profiles (name)
       `)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    setPurchaseOrders(data as PurchaseOrder[] || []);
+    setPurchaseOrders((data as any) || []);
   };
 
   const fetchProducts = async () => {
@@ -146,7 +146,7 @@ export default function PurchaseOrders() {
     if (searchTerm) {
       filtered = filtered.filter(order =>
         order.po_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.suppliers.name.toLowerCase().includes(searchTerm.toLowerCase())
+        (order.suppliers?.name && order.suppliers.name.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -252,7 +252,7 @@ export default function PurchaseOrders() {
 
   const exportPO = (po: PurchaseOrder) => {
     // Simple CSV export - in a real app, you'd generate a proper PDF
-    const csvContent = `Purchase Order: ${po.po_number}\nSupplier: ${po.suppliers.name}\nTotal: $${po.total_amount.toFixed(2)}\nStatus: ${po.status}\nCreated: ${new Date(po.created_at).toLocaleDateString()}`;
+    const csvContent = `Purchase Order: ${po.po_number}\nSupplier: ${po.suppliers?.name || 'Unknown'}\nTotal: $${po.total_amount.toFixed(2)}\nStatus: ${po.status}\nCreated: ${new Date(po.created_at).toLocaleDateString()}`;
     
     const blob = new Blob([csvContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
@@ -472,7 +472,7 @@ export default function PurchaseOrders() {
                 {filteredOrders.map((order) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-medium">{order.po_number}</TableCell>
-                    <TableCell>{order.suppliers.name}</TableCell>
+                    <TableCell>{order.suppliers?.name || 'Unknown'}</TableCell>
                     <TableCell className="hidden sm:table-cell">
                       <Badge className={getStatusColor(order.status)}>
                         {order.status}
@@ -486,7 +486,7 @@ export default function PurchaseOrders() {
                       }
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">
-                      {order.profiles.name}
+                      {order.profiles?.name || 'Unknown'}
                     </TableCell>
                     <TableCell>
                       <Button

@@ -33,6 +33,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { CSVImporter } from '@/components/csv/CSVImporter';
 import { BulkOperations, ProductRow } from '@/components/inventory/BulkOperations';
 import { LowStockAlert } from '@/components/notifications/LowStockAlert';
+import { useToast } from '@/hooks/use-toast';
 
 interface Product {
   id: string;
